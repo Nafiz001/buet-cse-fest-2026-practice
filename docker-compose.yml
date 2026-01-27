@@ -246,12 +246,15 @@ services:
       context: ./admin-frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_HOSPITAL_API_URL: http://localhost:3001
-        NEXT_PUBLIC_AMBULANCE_API_URL: http://localhost:3002
-        NEXT_PUBLIC_REQUEST_API_URL: http://localhost:3004
+        NEXT_PUBLIC_HOSPITAL_API_URL: http://40.81.240.99:3001
+        NEXT_PUBLIC_AMBULANCE_API_URL: http://40.81.240.99:3002
+        NEXT_PUBLIC_REQUEST_API_URL: http://40.81.240.99:3004
     container_name: citycare-admin-frontend
     environment:
       NODE_ENV: production
+      NEXT_PUBLIC_HOSPITAL_API_URL: http://40.81.240.99:3001
+      NEXT_PUBLIC_AMBULANCE_API_URL: http://40.81.240.99:3002
+      NEXT_PUBLIC_REQUEST_API_URL: http://40.81.240.99:3004
     ports:
       - "3000:3000"
     depends_on:
