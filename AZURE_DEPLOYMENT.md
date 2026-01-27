@@ -1,15 +1,36 @@
 # CityCare - Azure Deployment Guide
 
-## Prerequisites
+> **⚠️ NOTICE:** This guide is for **Azure Container Apps** deployment. For the recommended **CI/CD deployment with Azure VM**, see [CI-CD.md](.github/CI-CD.md)
+
+## Deployment Options
+
+1. **[CI/CD with Azure VM](.github/CI-CD.md)** ⭐ **RECOMMENDED**
+   - Automated deployment with GitHub Actions
+   - Self-hosted runner on Azure VM
+   - Continuous Integration and Continuous Deployment
+   - Cost-effective for development/demo
+   
+2. **Azure Container Apps** (This Guide)
+   - Fully managed container platform
+   - Better for production workloads
+   - Higher cost but more scalable
+
+---
+
+## Azure Container Apps Deployment
+
+### Prerequisites
 
 1. **Azure CLI** - Install from: https://aka.ms/installazurecliwindows
 2. **Docker Desktop** - Running and logged in
 3. **Azure Subscription** - Active with sufficient credits
 4. **Node.js & npm** - For Prisma migrations
 
-## Quick Deploy (30-45 minutes)
+### Quick Deploy (30-45 minutes)
 
-### Step 1: Deploy Infrastructure & Services
+> **Note:** These PowerShell scripts are now deprecated in favor of the CI/CD approach. They are kept for reference only.
+
+#### Step 1: Deploy Infrastructure & Services (DEPRECATED)
 
 ```powershell
 cd citycare

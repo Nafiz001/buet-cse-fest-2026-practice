@@ -464,33 +464,34 @@ docker-compose down -v
 
 ## 🚀 Deployment
 
-### Fly.io Deployment (Validation Service)
+### Azure VM with CI/CD (Recommended) ⭐
 
-```bash
-cd validation-service
+For automated deployment with GitHub Actions and Azure Virtual Machine, see:
 
-# Install Fly CLI
-# https://fly.io/docs/hands-on/install-flyctl/
+**[.github/CI-CD.md](.github/CI-CD.md)**
 
-# Login
-fly auth login
+This approach provides:
+- ✅ Automated CI/CD pipeline with GitHub Actions
+- ✅ Cost-effective Azure VM deployment
+- ✅ Self-hosted runner configuration
+- ✅ Automatic testing on PRs
+- ✅ One-click deployment to production
 
-# Launch app
-fly launch --name citycare-validation
+### Azure Container Apps (Alternative)
 
-# Set secrets
-fly secrets set HOSPITAL_SERVICE_URL=https://your-hospital-service.fly.dev
-fly secrets set AMBULANCE_SERVICE_URL=https://your-ambulance-service.fly.dev
+For fully managed Azure deployment, see:
 
-# Deploy
-fly deploy
+**[AZURE_DEPLOYMENT.md](AZURE_DEPLOYMENT.md)**
 
-# View logs
-fly logs
+This approach provides:
+- ✅ Fully managed containers
+- ✅ Auto-scaling
+- ✅ Production-grade infrastructure
+- ❌ Higher cost
 
-# Scale
-fly scale count 2
-```
+### Local Development
+
+See the Quick Start section above for local Docker Compose setup.
 
 ---
 
