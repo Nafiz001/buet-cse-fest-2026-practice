@@ -1,0 +1,33 @@
+// Emergency Request Service Database Schema
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RequestStatus {
+  APPROVED
+  REJECTED
+}
+
+model EmergencyRequest {
+  id                         String        @id @default(uuid())
+  city                       String
+  requiredIcuBeds            Int           @map("required_icu_beds")
+  requiredAmbulanceCapacity  Int           @map("required_ambulance_capacity")
+  status                     RequestStatus
+  
+  // Store validation details for auditability
+  validationReason           String?       @map("validation_reason")
+  validationDetails          Json?         @map("validation_details")
+  
+  createdAt                  DateTime      @default(now()) @map("created_at")
+  updatedAt                  DateTime      @updatedAt @map("updated_at")
+
+  @@index([city, status])
+  @@index([createdAt])
+  @@map("emergency_requests")
+}

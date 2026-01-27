@@ -1,0 +1,22 @@
+// Hospital Service Database Schema
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Hospital {
+  id          String   @id @default(uuid())
+  name        String
+  city        String
+  icuBeds     Int      @map("icu_beds")
+  ventilators Int
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([city])
+  @@map("hospitals")
+}

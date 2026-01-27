@@ -1,0 +1,27 @@
+// Ambulance Service Database Schema
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AmbulanceStatus {
+  AVAILABLE
+  BUSY
+}
+
+model Ambulance {
+  id         String          @id @default(uuid())
+  vehicleId  String          @unique @map("vehicle_id")
+  city       String
+  capacity   Int
+  status     AmbulanceStatus @default(AVAILABLE)
+  createdAt  DateTime        @default(now()) @map("created_at")
+  updatedAt  DateTime        @updatedAt @map("updated_at")
+
+  @@index([city, status])
+  @@map("ambulances")
+}

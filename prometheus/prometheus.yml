@@ -1,0 +1,49 @@
+# Prometheus Configuration for CityCare Platform
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'citycare-monitor'
+
+# Scrape configurations
+scrape_configs:
+  # Hospital Service
+  - job_name: 'hospital-service'
+    static_configs:
+      - targets: ['hospital-service:3001']
+        labels:
+          service: 'hospital'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # Ambulance Service
+  - job_name: 'ambulance-service'
+    static_configs:
+      - targets: ['ambulance-service:3002']
+        labels:
+          service: 'ambulance'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # Validation Service
+  - job_name: 'validation-service'
+    static_configs:
+      - targets: ['validation-service:3003']
+        labels:
+          service: 'validation'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # Emergency Request Service
+  - job_name: 'emergency-request-service'
+    static_configs:
+      - targets: ['emergency-request-service:3004']
+        labels:
+          service: 'emergency-request'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

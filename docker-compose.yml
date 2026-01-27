@@ -1,0 +1,280 @@
+version: '3.8'
+
+services:
+  # ================================
+  # DATABASES
+  # ================================
+  
+  hospital-db:
+    image: postgres:16-alpine
+    container_name: citycare-hospital-db
+    environment:
+      POSTGRES_DB: hospital_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - hospital-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - citycare-network
+
+  ambulance-db:
+    image: postgres:16-alpine
+    container_name: citycare-ambulance-db
+    environment:
+      POSTGRES_DB: ambulance_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - ambulance-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - citycare-network
+
+  emergency-request-db:
+    image: postgres:16-alpine
+    container_name: citycare-emergency-request-db
+    environment:
+      POSTGRES_DB: emergency_request_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - emergency-request-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - citycare-network
+
+  # ================================
+  # MICROSERVICES
+  # ================================
+
+  hospital-service:
+    build:
+      context: ./hospital-service
+      dockerfile: Dockerfile
+    container_name: citycare-hospital-service
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://postgres:postgres@hospital-db:5432/hospital_db?schema=public
+      LOG_LEVEL: info
+    ports:
+      - "3001:3001"
+    depends_on:
+      hospital-db:
+        condition: service_healthy
+    command: sh -c "npx prisma migrate deploy && node src/server.js"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - citycare-network
+
+  ambulance-service:
+    build:
+      context: ./ambulance-service
+      dockerfile: Dockerfile
+    container_name: citycare-ambulance-service
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      DATABASE_URL: postgresql://postgres:postgres@ambulance-db:5432/ambulance_db?schema=public
+      LOG_LEVEL: info
+    ports:
+      - "3002:3002"
+    depends_on:
+      ambulance-db:
+        condition: service_healthy
+    command: sh -c "npx prisma migrate deploy && node src/server.js"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3002/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - citycare-network
+
+  validation-service:
+    build:
+      context: ./validation-service
+      dockerfile: Dockerfile
+    container_name: citycare-validation-service
+    environment:
+      NODE_ENV: production
+      PORT: 3003
+      HOSPITAL_SERVICE_URL: http://hospital-service:3001
+      AMBULANCE_SERVICE_URL: http://ambulance-service:3002
+      REQUEST_TIMEOUT_MS: 5000
+      LOG_LEVEL: info
+    ports:
+      - "3003:3003"
+    depends_on:
+      hospital-service:
+        condition: service_healthy
+      ambulance-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3003/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - citycare-network
+
+  emergency-request-service:
+    build:
+      context: ./emergency-request-service
+      dockerfile: Dockerfile
+    container_name: citycare-emergency-request-service
+    environment:
+      NODE_ENV: production
+      PORT: 3004
+      DATABASE_URL: postgresql://postgres:postgres@emergency-request-db:5432/emergency_request_db?schema=public
+      VALIDATION_SERVICE_URL: http://validation-service:3003
+      REQUEST_TIMEOUT_MS: 5000
+      LOG_LEVEL: info
+    ports:
+      - "3004:3004"
+    depends_on:
+      emergency-request-db:
+        condition: service_healthy
+      validation-service:
+        condition: service_healthy
+    command: sh -c "npx prisma migrate deploy && node src/server.js"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3004/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - citycare-network
+
+  # ================================
+  # OBSERVABILITY
+  # ================================
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: citycare-prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - "9090:9090"
+    networks:
+      - citycare-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: citycare-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3006:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - citycare-network
+
+  orchestrator-service:
+    build:
+      context: ./orchestrator-service
+      dockerfile: Dockerfile
+    container_name: citycare-orchestrator
+    ports:
+      - "3005:3005"
+    environment:
+      - NODE_ENV=production
+      - PORT=3005
+      - VALIDATION_SERVICE_URL=http://validation-service:3003
+      - HOSPITAL_SERVICE_URL=http://hospital-service:3001
+      - AMBULANCE_SERVICE_URL=http://ambulance-service:3002
+      - REQUEST_TIMEOUT_MS=5000
+      - LOG_LEVEL=info
+    depends_on:
+      validation-service:
+        condition: service_healthy
+      hospital-service:
+        condition: service_healthy
+      ambulance-service:
+        condition: service_healthy
+    networks:
+      - citycare-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3005/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  admin-frontend:
+    build:
+      context: ./admin-frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_HOSPITAL_API_URL: http://localhost:3001
+        NEXT_PUBLIC_AMBULANCE_API_URL: http://localhost:3002
+        NEXT_PUBLIC_REQUEST_API_URL: http://localhost:3004
+    container_name: citycare-admin-frontend
+    environment:
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      hospital-service:
+        condition: service_healthy
+      ambulance-service:
+        condition: service_healthy
+      emergency-request-service:
+        condition: service_healthy
+    networks:
+      - citycare-network
+
+# ================================
+# NETWORKS & VOLUMES
+# ================================
+
+networks:
+  citycare-network:
+    driver: bridge
+
+volumes:
+  hospital-db-data:
+  ambulance-db-data:
+  emergency-request-db-data:
+  prometheus-data:
+  grafana-data:
