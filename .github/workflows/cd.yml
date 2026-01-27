@@ -1,9 +1,6 @@
 name: Continuous Deployment
 
 on:
-  # push: 
-  #   branches:
-  #     - main
   workflow_dispatch:
 
 jobs:
@@ -14,11 +11,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Check Docker Compose version
-        run: |
-          docker-compose --version || docker compose version
+      - name: Stop existing containers
+        run: docker compose down -v
+        continue-on-error: true
 
-      - name: Deploy to VM
-        run: |
-          docker compose down -v
-          docker compose up -d --build
+      - name: Deploy application
+        run: docker compose up -d --build
