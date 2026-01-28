@@ -9,14 +9,37 @@ on:
 jobs:
   deploy:
     runs-on: self-hosted
+    defaults:
+      run:
+        working-directory: ./citycare
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Stop containers
-        run: docker compose down -v
+      - name: Stop existing containers
+        run: docker compose down
         continue-on-error: true
 
-      - name: Start services
-        run: docker compose up -d --build
+      - name: Start services with scaling
+        run: |
+          docker compose up -d --build \
+            --scale hospital-service=3 \
+            --scale ambulance-service=3 \
+            --scale emergency-request-service=3 \
+            --scale validation-service=2 \
+            --scale orchestrator-service=2
+
+      - name: Wait for services to start
+        run: sleep 15
+
+      - name: Check service health
+        run: |
+          docker compose ps
+          curl -f http://localhost:3001/health || echo "Hospital service not ready yet"
+          curl -f http://localhost:3002/health || echo "Ambulance service not ready yet"
+          curl -f http://localhost:3004/health || echo "Emergency Request service not ready yet"
+        continue-on-error: true
+
+      - name: Show container status
+        run: docker compose ps
