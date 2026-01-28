@@ -29,15 +29,19 @@ COPY --from=deps --chown=ambulanceuser:nodejs /app/package*.json ./
 
 COPY --chown=ambulanceuser:nodejs ./src ./src
 COPY --chown=ambulanceuser:nodejs ./prisma ./prisma
+COPY --chown=ambulanceuser:nodejs ./entrypoint.sh ./entrypoint.sh
+
+# Make entrypoint executable
+USER root
+RUN chmod +x ./entrypoint.sh
+USER ambulanceuser
 
 ENV NODE_ENV=production
 ENV PORT=3002
-
-USER ambulanceuser
 
 EXPOSE 3002
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3002/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
-CMD ["node", "src/server.js"]
+CMD ["sh", "./entrypoint.sh"]
