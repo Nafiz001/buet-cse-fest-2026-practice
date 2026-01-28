@@ -2,7 +2,19 @@ const { PrismaClient } = require('@prisma/client');
 const logger = require('../utils/logger');
 const { hospitalCreationTotal } = require('../utils/metrics');
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  log: ['error', 'warn'],
+  errorFormat: 'pretty'
+});
+
+// Connect to database and handle connection errors
+prisma.$connect()
+  .then(() => {
+    logger.info('Database connected successfully');
+  })
+  .catch((err) => {
+    logger.error({ err }, 'Failed to connect to database');
+  });
 
 /**
  * Business logic layer for hospital operations
@@ -51,6 +63,9 @@ class HospitalService {
    */
   async getHospitals(city) {
     try {
+      // Check database connection first
+      await prisma.$queryRaw`SELECT 1`;
+      
       const where = city ? { city: city.toLowerCase() } : {};
       
       const hospitals = await prisma.hospital.findMany({
@@ -62,7 +77,12 @@ class HospitalService {
       return hospitals;
     } catch (error) {
       logger.error({ error, city }, 'Failed to retrieve hospitals');
-      throw error;
+      
+      // Create a more informative error
+      const err = new Error(`Database error: ${error.message}`);
+      err.statusCode = 500;
+      err.originalError = error;
+      throw err;
     }
   }
 

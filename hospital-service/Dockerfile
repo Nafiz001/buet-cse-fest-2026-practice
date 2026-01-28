@@ -37,6 +37,12 @@ COPY --from=deps --chown=hospitaluser:nodejs /app/package*.json ./
 # Copy application code
 COPY --chown=hospitaluser:nodejs ./src ./src
 COPY --chown=hospitaluser:nodejs ./prisma ./prisma
+COPY --chown=hospitaluser:nodejs ./entrypoint.sh ./entrypoint.sh
+
+# Make entrypoint executable
+USER root
+RUN chmod +x ./entrypoint.sh
+USER hospitaluser
 
 # Set environment
 ENV NODE_ENV=production
@@ -52,5 +58,5 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
-# Start application
-CMD ["node", "src/server.js"]
+# Start application with entrypoint script
+CMD ["sh", "./entrypoint.sh"]
