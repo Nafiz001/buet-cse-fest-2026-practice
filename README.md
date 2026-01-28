@@ -8,6 +8,32 @@ Built for BUET CSE Fest 2026 - Final Round Hackathon
 
 ---
 
+## 🚀 NEW: Scalable Architecture with RabbitMQ & Nginx
+
+CityCare now includes **RabbitMQ** for message queuing and **Nginx** for load balancing - a simpler alternative to Kubernetes perfect for hackathons!
+
+**Quick Start with Scaling:**
+```bash
+# Windows
+.\start-scaled.ps1
+
+# Linux/Mac
+./start-scaled.sh
+```
+
+📚 **Documentation:**
+- [SCALING_GUIDE.md](SCALING_GUIDE.md) - Complete scaling setup and deployment guide
+- [RABBITMQ_GUIDE.md](RABBITMQ_GUIDE.md) - RabbitMQ integration and examples
+
+**Features:**
+- ✅ Nginx load balancing across multiple service instances
+- ✅ RabbitMQ for asynchronous message processing
+- ✅ Horizontal scaling (3x Hospital, 3x Ambulance, 3x Emergency Request services)
+- ✅ Health checks and automatic failover
+- ✅ Simple single-command deployment
+
+---
+
 ## 🎯 Project Overview
 
 CityCare is a mission-critical emergency response platform that coordinates:
@@ -151,27 +177,53 @@ cd citycare
 
 ### 2. Start with Docker Compose (Recommended)
 
+**Option A: Standard Deployment**
 ```bash
 # Build and start all services
 docker-compose up --build
 
 # Or run in detached mode
 docker-compose up -d --build
+```
 
-# View logs
+**Option B: Scaled Deployment (Recommended for Production/Demo)**
+```bash
+# Windows
+.\start-scaled.ps1
+
+# Linux/Mac
+./start-scaled.sh
+
+# Or manually with Docker Compose
+docker-compose up -d --build \
+  --scale hospital-service=3 \
+  --scale ambulance-service=3 \
+  --scale emergency-request-service=3 \
+  --scale validation-service=2 \
+  --scale orchestrator-service=2
+```
+
+**View logs:**
+```bash
 docker-compose logs -f
+```
 
-# Stop all services
+**Stop all services:**
+```bash
 docker-compose down
 ```
 
 **Services will be available at:**
-- Hospital Service: http://localhost:3001
-- Ambulance Service: http://localhost:3002
-- Validation Service: http://localhost:3003
-- Emergency Request Service: http://localhost:3004
+- **Nginx Load Balancer**: http://localhost:8080 (status page)
+- Hospital Service: http://localhost:3001 (load balanced)
+- Ambulance Service: http://localhost:3002 (load balanced)
+- Validation Service: http://localhost:3003 (load balanced)
+- Emergency Request Service: http://localhost:3004 (load balanced)
+- Orchestrator Service: http://localhost:3005 (load balanced)
+- Admin Frontend: http://localhost:3000
+- RabbitMQ Management: http://localhost:15672 (citycare/citycare123)
 - Prometheus: http://localhost:9090
-- Grafana: http://localhost:3000 (admin/admin)
+- Grafana: http://localhost:3006 (admin/admin)
 
 ### 3. Run Locally (Development)
 

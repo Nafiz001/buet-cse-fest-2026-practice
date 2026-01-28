@@ -63,6 +63,30 @@ services:
       - citycare-network
 
   # ================================
+  # MESSAGE BROKER
+  # ================================
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: citycare-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: citycare
+      RABBITMQ_DEFAULT_PASS: citycare123
+      RABBITMQ_DEFAULT_VHOST: /
+    ports:
+      - "5672:5672"    # AMQP protocol
+      - "15672:15672"  # Management UI
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - citycare-network
+
+  # ================================
   # MICROSERVICES
   # ================================
 
@@ -70,16 +94,18 @@ services:
     build:
       context: ./hospital-service
       dockerfile: Dockerfile
-    container_name: citycare-hospital-service
     environment:
       NODE_ENV: production
       PORT: 3001
       DATABASE_URL: postgresql://postgres:postgres@hospital-db:5432/hospital_db?schema=public
+      RABBITMQ_URL: amqp://citycare:citycare123@rabbitmq:5672
       LOG_LEVEL: info
-    ports:
-      - "3001:3001"
+    expose:
+      - "3001"
     depends_on:
       hospital-db:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     command: sh -c "npx prisma migrate deploy && node src/server.js"
     healthcheck:
@@ -90,21 +116,25 @@ services:
       start_period: 10s
     networks:
       - citycare-network
+    deploy:
+      replicas: 3
 
   ambulance-service:
     build:
       context: ./ambulance-service
       dockerfile: Dockerfile
-    container_name: citycare-ambulance-service
     environment:
       NODE_ENV: production
       PORT: 3002
       DATABASE_URL: postgresql://postgres:postgres@ambulance-db:5432/ambulance_db?schema=public
+      RABBITMQ_URL: amqp://citycare:citycare123@rabbitmq:5672
       LOG_LEVEL: info
-    ports:
-      - "3002:3002"
+    expose:
+      - "3002"
     depends_on:
       ambulance-db:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     command: sh -c "npx prisma migrate deploy && node src/server.js"
     healthcheck:
@@ -115,25 +145,25 @@ services:
       start_period: 10s
     networks:
       - citycare-network
+    deploy:
+      replicas: 3
 
   validation-service:
     build:
       context: ./validation-service
       dockerfile: Dockerfile
-    container_name: citycare-validation-service
     environment:
       NODE_ENV: production
       PORT: 3003
-      HOSPITAL_SERVICE_URL: http://hospital-service:3001
-      AMBULANCE_SERVICE_URL: http://ambulance-service:3002
+      HOSPITAL_SERVICE_URL: http://nginx:3001
+      AMBULANCE_SERVICE_URL: http://nginx:3002
+      RABBITMQ_URL: amqp://citycare:citycare123@rabbitmq:5672
       REQUEST_TIMEOUT_MS: 5000
       LOG_LEVEL: info
-    ports:
-      - "3003:3003"
+    expose:
+      - "3003"
     depends_on:
-      hospital-service:
-        condition: service_healthy
-      ambulance-service:
+      rabbitmq:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3003/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
@@ -143,25 +173,27 @@ services:
       start_period: 10s
     networks:
       - citycare-network
+    deploy:
+      replicas: 2
 
   emergency-request-service:
     build:
       context: ./emergency-request-service
       dockerfile: Dockerfile
-    container_name: citycare-emergency-request-service
     environment:
       NODE_ENV: production
       PORT: 3004
       DATABASE_URL: postgresql://postgres:postgres@emergency-request-db:5432/emergency_request_db?schema=public
-      VALIDATION_SERVICE_URL: http://validation-service:3003
+      VALIDATION_SERVICE_URL: http://nginx:3003
+      RABBITMQ_URL: amqp://citycare:citycare123@rabbitmq:5672
       REQUEST_TIMEOUT_MS: 5000
       LOG_LEVEL: info
-    ports:
-      - "3004:3004"
+    expose:
+      - "3004"
     depends_on:
       emergency-request-db:
         condition: service_healthy
-      validation-service:
+      rabbitmq:
         condition: service_healthy
     command: sh -c "npx prisma migrate deploy && node src/server.js"
     healthcheck:
@@ -172,10 +204,38 @@ services:
       start_period: 10s
     networks:
       - citycare-network
+    deploy:
+      replicas: 3
 
   # ================================
   # OBSERVABILITY
   # ================================
+
+  nginx:
+    image: nginx:alpine
+    container_name: citycare-nginx
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "3001:3001"  # Hospital Service
+      - "3002:3002"  # Ambulance Service
+      - "3003:3003"  # Validation Service
+      - "3004:3004"  # Emergency Request Service
+      - "3005:3005"  # Orchestrator Service
+      - "8080:8080"  # Nginx status page
+    depends_on:
+      - hospital-service
+      - ambulance-service
+      - validation-service
+      - emergency-request-service
+      - orchestrator-service
+    networks:
+      - citycare-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/nginx_status"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
 
   prometheus:
     image: prom/prometheus:latest
@@ -214,23 +274,19 @@ services:
     build:
       context: ./orchestrator-service
       dockerfile: Dockerfile
-    container_name: citycare-orchestrator
-    ports:
-      - "3005:3005"
     environment:
       - NODE_ENV=production
       - PORT=3005
-      - VALIDATION_SERVICE_URL=http://validation-service:3003
-      - HOSPITAL_SERVICE_URL=http://hospital-service:3001
-      - AMBULANCE_SERVICE_URL=http://ambulance-service:3002
+      - VALIDATION_SERVICE_URL=http://nginx:3003
+      - HOSPITAL_SERVICE_URL=http://nginx:3001
+      - AMBULANCE_SERVICE_URL=http://nginx:3002
+      - RABBITMQ_URL=amqp://citycare:citycare123@rabbitmq:5672
       - REQUEST_TIMEOUT_MS=5000
       - LOG_LEVEL=info
+    expose:
+      - "3005"
     depends_on:
-      validation-service:
-        condition: service_healthy
-      hospital-service:
-        condition: service_healthy
-      ambulance-service:
+      rabbitmq:
         condition: service_healthy
     networks:
       - citycare-network
@@ -240,30 +296,27 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    deploy:
+      replicas: 2
 
   admin-frontend:
     build:
       context: ./admin-frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_HOSPITAL_API_URL: http://40.81.240.99:3001
-        NEXT_PUBLIC_AMBULANCE_API_URL: http://40.81.240.99:3002
-        NEXT_PUBLIC_REQUEST_API_URL: http://40.81.240.99:3004
+        NEXT_PUBLIC_HOSPITAL_API_URL: http://localhost:3001
+        NEXT_PUBLIC_AMBULANCE_API_URL: http://localhost:3002
+        NEXT_PUBLIC_REQUEST_API_URL: http://localhost:3004
     container_name: citycare-admin-frontend
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_HOSPITAL_API_URL: http://40.81.240.99:3001
-      NEXT_PUBLIC_AMBULANCE_API_URL: http://40.81.240.99:3002
-      NEXT_PUBLIC_REQUEST_API_URL: http://40.81.240.99:3004
+      NEXT_PUBLIC_HOSPITAL_API_URL: http://localhost:3001
+      NEXT_PUBLIC_AMBULANCE_API_URL: http://localhost:3002
+      NEXT_PUBLIC_REQUEST_API_URL: http://localhost:3004
     ports:
       - "3000:3000"
     depends_on:
-      hospital-service:
-        condition: service_healthy
-      ambulance-service:
-        condition: service_healthy
-      emergency-request-service:
-        condition: service_healthy
+      - nginx
     networks:
       - citycare-network
 
@@ -279,5 +332,6 @@ volumes:
   hospital-db-data:
   ambulance-db-data:
   emergency-request-db-data:
+  rabbitmq-data:
   prometheus-data:
   grafana-data:
